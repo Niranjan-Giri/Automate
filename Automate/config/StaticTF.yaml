@@ -1,0 +1,4 @@
+static_tf:
+  ros__parameters:
+    pcl2_topic: /point_cloud/point_cloud
+    base_link: base_links
