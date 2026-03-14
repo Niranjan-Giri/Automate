@@ -8,7 +8,7 @@ def generate_launch_description():
     params_file = os.path.join(
         get_package_share_directory('Automate'),
         'config',
-        'StaticTF.yaml'
+        'params.yaml'
     )
 
     return LaunchDescription([

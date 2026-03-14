@@ -10,23 +10,42 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(PCL REQUIRED)
+find_package(pcl_conversions REQUIRED)
 
-add_executable(static_tf 
-  src/StaticTF.cpp
-)
-
+add_executable(static_tf src/StaticTF.cpp)
 target_include_directories(static_tf PRIVATE
   ${CMAKE_SOURCE_DIR}/include
 )
+ament_target_dependencies(static_tf 
+  rclcpp 
+  sensor_msgs 
+  geometry_msgs 
+  tf2_ros
+)
 
-ament_target_dependencies(static_tf rclcpp sensor_msgs geometry_msgs tf2_ros)
+add_executable(odometry src/Odometry.cpp)
+target_include_directories(odometry PRIVATE
+  ${CMAKE_SOURCE_DIR}/include
+)
+ament_target_dependencies(odometry 
+  rclcpp 
+  sensor_msgs 
+  geometry_msgs 
+  nav_msgs 
+  tf2_ros 
+  pcl_conversions
+)
+target_link_libraries(odometry ${PCL_LIBRARIES})
+
+INSTALL(TARGETS odometry DESTINATION lib/${PROJECT_NAME})
 INSTALL(TARGETS static_tf DESTINATION lib/${PROJECT_NAME})
 
 INSTALL(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
 )
-
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
