@@ -1,4 +1,10 @@
 static_tf:
   ros__parameters:
     pcl2_topic: /point_cloud/point_cloud
-    base_link: base_links
+    base_link: base_link
+
+odometry:
+  ros__parameters:
+    pcl2_topic: /point_cloud/point_cloud
+    odom_topic: /odom
+    base_link: base_link

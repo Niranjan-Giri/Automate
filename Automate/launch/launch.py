@@ -17,5 +17,11 @@ def generate_launch_description():
             executable='static_tf',
             name='static_tf',
             parameters=[params_file]
+        ),
+        Node(
+            package='Automate',
+            executable='odometry',
+            name='odometry',
+            parameters=[params_file]
         )
     ])
