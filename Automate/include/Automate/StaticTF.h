@@ -12,18 +12,19 @@ public:
     StaticTF();
 
 private:
-    void sensor_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+    void timer_callback();
+    void check_frame(const std::string& frame);
     void publish_static_tf(const std::string& parent_link, const std::string& child_link);
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tf_broadcaster_;
 
-    std::string topic_name;
+    std::vector<std::string> child_frames;
     std::string parent_frame;
 
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pcl2_sub_;
+    std::unordered_map<std::string, bool> tf_resolved;
+    std::unordered_map<std::string, int> attempts;
 
-    bool tf_published;
-    int failed_attempt;
+    rclcpp::TimerBase::SharedPtr timer_;
 };

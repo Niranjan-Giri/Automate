@@ -17,6 +17,12 @@ Odometry::Odometry() : Node("odometry")
 
     this->declare_parameter<std::string>("base_link", "base_link");
     base_link = this->get_parameter("base_link").as_string();
+
+    this->declare_parameter<bool>("use_imu", false);
+    use_imu = this->get_parameter("use_imu").as_bool();
+
+    this->declare_parameter<std::string>("imu_topic", "/imu/data");
+    imu_topic = this->get_parameter("imu_topic").as_string();
 }
 
 void Odometry::pcl2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)

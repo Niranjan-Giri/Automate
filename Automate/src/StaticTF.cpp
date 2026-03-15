@@ -1,59 +1,102 @@
 #include "Automate/StaticTF.h"
 
-StaticTF::StaticTF() : Node("static_tf"), tf_published(0), failed_attempt(0)
+StaticTF::StaticTF() : Node("static_tf")
 {
+    this->declare_parameter<std::string>("parent_frame",     "base_link");
+    this->declare_parameter<std::vector<std::string>>("child_frames", {"Lidar"});
+
+    parent_frame = this->get_parameter("parent_frame").as_string();
+    child_frames = this->get_parameter("child_frames").as_string_array();
+
+    if (child_frames.empty()) 
+    {
+        RCLCPP_ERROR(this->get_logger(), "No child_frames provided! Shutting down.");
+        rclcpp::shutdown();
+        return;
+    }
+
+    for (const auto & frame : child_frames) 
+    {
+        attempts[frame]    = 0;
+        tf_resolved[frame] = false;
+        RCLCPP_INFO(this->get_logger(), "Watching frame: %s", frame.c_str());
+    }
+
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, this);
     tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
 
-    this->declare_parameter<std::string>("pcl2_topic", "/point_cloud/point_cloud");
-    topic_name = this->get_parameter("pcl2_topic").as_string();
-
-    this->declare_parameter<std::string>("base_link", "base_link");
-    parent_frame = this->get_parameter("base_link").as_string();
-
-    pcl2_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        topic_name, 10,
-        std::bind(&StaticTF::sensor_callback, this, std::placeholders::_1)
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(500),
+        std::bind(&StaticTF::timer_callback, this)
     );
 }
 
-void StaticTF::sensor_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+void StaticTF::timer_callback()
 {
-    if (tf_published) return;
+    bool all_exists = true;
 
-    const std::string sensor_frame = msg->header.frame_id;
-
-    if (sensor_frame.empty())
+    for (const auto& frame : child_frames)
     {
-        RCLCPP_WARN(this->get_logger(), "Frame name empty for sensor");
+        if (!tf_resolved[frame])
+        {
+            all_exists = false;
+            break;
+        }
+    }
+
+    if (all_exists)
+    {
+        RCLCPP_INFO(this->get_logger(), "Every frame is statically transformed with base");
+        timer_->cancel();
         return;
     }
 
+    for (const auto& frame : child_frames)
+    {
+        if (tf_resolved[frame]) continue;
+        check_frame(frame);
+    }
+}
+
+void StaticTF::check_frame(const std::string& frame)
+{
     try
     {
         tf_buffer_->lookupTransform(
             parent_frame,
-            sensor_frame,
+            frame,
             tf2::TimePointZero,
-            tf2::durationFromSec(0.1)
+            tf2::durationFromSec(0.05)
         );
-
-        RCLCPP_INFO(this->get_logger(), "TF exists: %s -> %s", parent_frame.c_str(), sensor_frame.c_str());
-        tf_published = true;
+        RCLCPP_INFO(
+            this->get_logger(),
+            "TF exists: %s -> %s", parent_frame.c_str(), frame.c_str()
+        );
+        tf_resolved[frame] = true;
     }
-    catch (const tf2::TransformException& e)
-    {
-        failed_attempt++;
+    catch (tf2::TransformException& e)
+    {   
+        attempts[frame]++;
 
-        if (failed_attempt < 2) 
+        if (attempts[frame] < 2)
         {
-            RCLCPP_WARN(this->get_logger(), "TF lookup failed (%d/2): %s", failed_attempt, e.what());
+            RCLCPP_WARN(
+                this->get_logger(),
+                "[%s] TF not found (%d/2): %s",
+                frame.c_str(), attempts[frame], e.what()
+            );
             return;
         }
 
-        RCLCPP_WARN(this->get_logger(), "No tf for %s -> %s", parent_frame.c_str(), sensor_frame.c_str());
-        publish_static_tf(parent_frame, sensor_frame);
+        RCLCPP_WARN(
+            this->get_logger(),
+            "[%s] Publishing static identity TF: %s -> %s",
+            frame.c_str(), parent_frame.c_str(), frame.c_str()
+        );
+
+        publish_static_tf(parent_frame, frame);
+        tf_resolved[frame] = true;
     }
 }
 
@@ -67,15 +110,13 @@ void StaticTF::publish_static_tf(const std::string& parent_link, const std::stri
     t.transform.translation.x = 0.0;
     t.transform.translation.y = 0.0;
     t.transform.translation.z = 0.0;
-    t.transform.rotation.x = 0.0;
-    t.transform.rotation.y = 0.0;
-    t.transform.rotation.z = 0.0;
-    t.transform.rotation.w = 1.0;
+
+    t.transform.rotation.x    = 0.0;
+    t.transform.rotation.y    = 0.0;
+    t.transform.rotation.z    = 0.0;
+    t.transform.rotation.w    = 1.0;
 
     tf_broadcaster_->sendTransform(t);
-    tf_published = true;
-
-    RCLCPP_INFO(this->get_logger(), "Published transform %s -> %s", parent_link.c_str(), child_link.c_str());
 }
 
 int main(int argc, char** argv)

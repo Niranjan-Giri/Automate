@@ -27,4 +27,6 @@ private:
     Eigen::Matrix4f pose;
 
     std::string base_link;
+    bool use_imu;
+    std::string imu_topic;
 };
