@@ -8,8 +8,9 @@ Odometry::Odometry() : Node("odometry")
         std::bind(&Odometry::pcl2_callback, this, std::placeholders::_1)
     );
 
-    this->declare_parameter<std::string>("odom_topic", "/odom");
-    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(this->get_parameter("odom_topic").as_string(), 10);
+    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
+
+    scan_match_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("scan_match_pose", 10);
 
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
@@ -115,6 +116,21 @@ void Odometry::publish_odometry(rclcpp::Time stamp)
     odom.pose.pose.orientation.w = q.w();
 
     odom_pub_->publish(odom);
+
+    geometry_msgs::msg::PoseStamped scan_match_pose;
+    scan_match_pose.header.stamp = stamp;
+    scan_match_pose.header.frame_id = "map"; // Assuming it computes pose relative to an origin frame, like 'map'
+
+    scan_match_pose.pose.position.x = pose(0,3);
+    scan_match_pose.pose.position.y = pose(1,3);
+    scan_match_pose.pose.position.z = pose(2,3);
+
+    scan_match_pose.pose.orientation.x = q.x();
+    scan_match_pose.pose.orientation.y = q.y();
+    scan_match_pose.pose.orientation.z = q.z();
+    scan_match_pose.pose.orientation.w = q.w();
+
+    scan_match_pub_->publish(scan_match_pose);
 
     geometry_msgs::msg::TransformStamped tf;
     tf.header.stamp = stamp;

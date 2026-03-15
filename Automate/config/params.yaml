@@ -8,7 +8,6 @@ static_tf:
 odometry:
   ros__parameters:
     pcl2_topic: /point_cloud/point_cloud
-    odom_topic: /odom
     base_link: base_link
     use_imu: true
     imu_topic: /imu
@@ -16,3 +15,4 @@ odometry:
 map_tf:
   ros__parameters:
     odom_topic: /odom
+    scan_match_topic: /scan_match_pose
