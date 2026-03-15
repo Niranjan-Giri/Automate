@@ -3,7 +3,7 @@
 StaticTF::StaticTF() : Node("static_tf")
 {
     this->declare_parameter<std::string>("parent_frame",     "base_link");
-    this->declare_parameter<std::vector<std::string>>("child_frames", {"Lidar"});
+    this->declare_parameter<std::vector<std::string>>("child_frames", {"Lidar", "imu_link"});
 
     parent_frame = this->get_parameter("parent_frame").as_string();
     child_frames = this->get_parameter("child_frames").as_string_array();

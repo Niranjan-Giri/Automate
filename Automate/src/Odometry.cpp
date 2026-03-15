@@ -18,11 +18,24 @@ Odometry::Odometry() : Node("odometry")
     this->declare_parameter<std::string>("base_link", "base_link");
     base_link = this->get_parameter("base_link").as_string();
 
-    this->declare_parameter<bool>("use_imu", false);
+    this->declare_parameter<bool>("use_imu", true);
     use_imu = this->get_parameter("use_imu").as_bool();
 
-    this->declare_parameter<std::string>("imu_topic", "/imu/data");
+    this->declare_parameter<std::string>("imu_topic", "/imu");
     imu_topic = this->get_parameter("imu_topic").as_string();
+
+    if (use_imu) {
+        imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+            imu_topic, 10,
+            std::bind(&Odometry::imu_callback, this, std::placeholders::_1)
+        );
+    }
+}
+
+void Odometry::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
+{
+    current_imu_orientation_ = Eigen::Quaternionf(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z);
+    imu_received_ = true;
 }
 
 void Odometry::pcl2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
@@ -70,6 +83,13 @@ void Odometry::pcl2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 
     Eigen::Matrix4f transform = icp.getFinalTransformation();
     pose = pose * transform;
+
+    if (use_imu && imu_received_)
+    {
+        Eigen::Matrix3f imu_rot = current_imu_orientation_.toRotationMatrix();
+        pose.block<3, 3>(0, 0) = imu_rot;
+    }
+
     publish_odometry(msg->header.stamp);
     previous_pcl2 = pcl2;
 }
