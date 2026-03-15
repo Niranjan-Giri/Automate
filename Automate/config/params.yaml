@@ -12,3 +12,7 @@ odometry:
     base_link: base_link
     use_imu: true
     imu_topic: /imu
+
+map_tf:
+  ros__parameters:
+    odom_topic: /odom

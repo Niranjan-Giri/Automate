@@ -23,5 +23,11 @@ def generate_launch_description():
             executable='odometry',
             name='odometry',
             parameters=[params_file]
+        ),
+        Node(
+            package='Automate',
+            executable='map_tf',
+            name='map_tf',
+            parameters=[params_file]
         )
     ])

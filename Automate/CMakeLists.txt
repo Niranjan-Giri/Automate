@@ -40,8 +40,21 @@ ament_target_dependencies(odometry
 )
 target_link_libraries(odometry ${PCL_LIBRARIES})
 
+add_executable(map_tf src/MapTF.cpp)
+target_include_directories(map_tf PRIVATE
+  ${CMAKE_SOURCE_DIR}/include
+)
+ament_target_dependencies(map_tf
+  rclcpp 
+  sensor_msgs 
+  geometry_msgs 
+  nav_msgs 
+  tf2_ros 
+)
+
 INSTALL(TARGETS odometry DESTINATION lib/${PROJECT_NAME})
 INSTALL(TARGETS static_tf DESTINATION lib/${PROJECT_NAME})
+INSTALL(TARGETS map_tf DESTINATION lib/${PROJECT_NAME})
 
 INSTALL(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
