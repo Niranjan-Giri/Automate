@@ -1,5 +1,11 @@
 #include "Navigation/OccupancyGrid.h"
 
+// Log-odds constants - for probabilistic approach
+static constexpr float L_OCC  =  0.85f;
+static constexpr float L_FREE = -0.4f;
+static constexpr float L_MIN  = -2.0f;
+static constexpr float L_MAX  =  3.5f;
+
 OccupancyGrid::OccupancyGrid() : Node("occupancy_grid")
 {
     this->declare_parameter<std::string>("pcl2_topic", "/point_cloud/point_cloud");
@@ -28,14 +34,41 @@ OccupancyGrid::OccupancyGrid() : Node("occupancy_grid")
     grid_.info.resolution = resolution;
     grid_.info.width = 1000;
     grid_.info.height = 1000;
+
     grid_.info.origin.position.x = - (grid_.info.width / 2.0) * resolution;
     grid_.info.origin.position.y = - (grid_.info.height / 2.0) * resolution;
     grid_.info.origin.position.z = 0.0;
     grid_.info.origin.orientation.w = 1.0;
-    grid_.data.assign(grid_.info.width * grid_.info.height, -1);
+
+    int size = grid_.info.width * grid_.info.height;
+    grid_.data.assign(size, -1);
+    
+    log_odds.assign(size, 0.0f);
 
     map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 10);
 }
+
+void OccupancyGrid::update_cell(int index, float delta)
+{
+    log_odds[index] = std::clamp(log_odds[index] + delta, L_MIN, L_MAX);
+}
+
+void OccupancyGrid::log_odds_to_grid()
+{
+    for (size_t i = 0; i < log_odds.size(); i++)
+    {
+        if (log_odds[i] == 0.0f)
+        {
+            grid_.data[i] = -1;
+        }
+        else
+        {
+            float probability = 1.0f - (1.0f / 1.0f + std::exp(log_odds[i]));
+            grid_.data[i] = static_cast<int8_t>(std::clamp(probability * 100.0f, 0.f, 100.0f));
+        }
+    }
+}
+
 void OccupancyGrid::pcl2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 {
     geometry_msgs::msg::TransformStamped transform;
@@ -81,9 +114,11 @@ void OccupancyGrid::pcl2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr
         if (x_idx >= 0 && x_idx < static_cast<int>(grid_.info.width) &&
             y_idx >= 0 && y_idx < static_cast<int>(grid_.info.height))
         {
-            grid_.data[y_idx * grid_.info.width + x_idx] = 100;
+            update_cell(y_idx * grid_.info.width + x_idx, L_OCC);
         }
     }
+
+    log_odds_to_grid();
 
     grid_.header.stamp = this->get_clock()->now();
     grid_.header.frame_id = map_frame;
@@ -104,10 +139,7 @@ void OccupancyGrid::raycast(int x0, int y0, int x1, int y1)
             y0 < 0 || y0 >= static_cast<int>(grid_.info.height))
             break;
 
-        int index = y0 * grid_.info.width + x0;
-
-        if (grid_.data[index] != 100)
-            grid_.data[index] = 0;
+        update_cell(y0 * grid_.info.width + x0, L_FREE);
 
         int e2 = err;
         if (e2 > -dx) { err -= dy; x0 += sx; }
@@ -132,9 +164,7 @@ void OccupancyGrid::mark_free_circle(int cx, int cy, int radius)
                 y < 0 || y >= static_cast<int>(grid_.info.height))
                 continue;
 
-            int index = y * grid_.info.width + x;
-            if (grid_.data[index] != 100)
-                grid_.data[index] = 0;
+            update_cell(y * grid_.info.width + x, L_FREE);
         }
     }
 }
