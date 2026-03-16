@@ -119,7 +119,7 @@ void Odometry::publish_odometry(rclcpp::Time stamp)
 
     geometry_msgs::msg::PoseStamped scan_match_pose;
     scan_match_pose.header.stamp = stamp;
-    scan_match_pose.header.frame_id = "map"; // Assuming it computes pose relative to an origin frame, like 'map'
+    scan_match_pose.header.frame_id = "map";
 
     scan_match_pose.pose.position.x = pose(0,3);
     scan_match_pose.pose.position.y = pose(1,3);
