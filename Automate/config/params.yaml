@@ -1,13 +1,13 @@
 static_tf:
   ros__parameters:
     child_frames: 
-      - Lidar
+      - lidar_link
       - imu_link
     parent_frame: base_link
 
 odometry:
   ros__parameters:
-    pcl2_topic: /point_cloud/point_cloud
+    pcl2_topic: /lidar/point_cloud
     base_link: base_link
     use_imu: true
     imu_topic: /imu

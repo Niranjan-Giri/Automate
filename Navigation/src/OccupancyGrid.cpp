@@ -16,13 +16,15 @@ OccupancyGrid::OccupancyGrid() : Node("occupancy_grid")
 
     this->declare_parameter<std::string>("map_frame", "map");
     this->declare_parameter<double>("resolution", 0.1);
-    this->declare_parameter<double>("min_height", 0.1);
-    this->declare_parameter<double>("max_height", 2.0);
+    this->declare_parameter<double>("min_height", 0.001);
+    this->declare_parameter<double>("max_height", 5.0);
+    this->declare_parameter<double>("unknown_threshold", 0.01);
 
     map_frame = this->get_parameter("map_frame").as_string();
     resolution = this->get_parameter("resolution").as_double();
     min_height = this->get_parameter("min_height").as_double();
     max_height = this->get_parameter("max_height").as_double();
+    unknown_threshold = this->get_parameter("unknown_threshold").as_double();
 
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(
         this->get_clock(),
@@ -57,13 +59,13 @@ void OccupancyGrid::log_odds_to_grid()
 {
     for (size_t i = 0; i < log_odds.size(); i++)
     {
-        if (log_odds[i] == 0.0f)
+        if (std::fabs(log_odds[i]) <= static_cast<float>(unknown_threshold))
         {
             grid_.data[i] = -1;
         }
         else
         {
-            float probability = 1.0f - (1.0f / 1.0f + std::exp(log_odds[i]));
+            float probability = 1.0f - (1.0f / (1.0f + std::exp(log_odds[i])));
             grid_.data[i] = static_cast<int8_t>(std::clamp(probability * 100.0f, 0.f, 100.0f));
         }
     }
@@ -105,6 +107,10 @@ void OccupancyGrid::pcl2_callback(const sensor_msgs::msg::PointCloud2::SharedPtr
     {
         if (std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z))
             continue;
+
+        //if (point.z < min_height || point.z > max_height)
+        //    continue;
+
 
         int x_idx = static_cast<int>((point.x - grid_.info.origin.position.x) / resolution);
         int y_idx = static_cast<int>((point.y - grid_.info.origin.position.y) / resolution);

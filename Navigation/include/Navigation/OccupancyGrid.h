@@ -38,5 +38,6 @@ private:
     double resolution;
     double max_height;
     double min_height;
+    double unknown_threshold;
     std::string map_frame;
 };

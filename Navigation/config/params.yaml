@@ -1,6 +1,6 @@
 occupancy_grid:
   ros__parameters:
-    pcl2_topic: /point_cloud/point_cloud
+    pcl2_topic: /lidar/point_cloud
     map_frame: map
     resolution: 0.1
     min_height: 0.1
