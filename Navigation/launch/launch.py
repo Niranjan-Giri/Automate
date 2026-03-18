@@ -17,5 +17,11 @@ def generate_launch_description():
             executable='occupancy_grid',
             name='occupancy_grid',
             parameters=[{params_file}, {'use_sim_time': True}]
+        ),
+        Node(
+            package='Navigation',
+            executable='local_costmap',
+            name='local_costmap',
+            parameters=[{params_file}, {'use_sim_time': True}]
         )
     ])

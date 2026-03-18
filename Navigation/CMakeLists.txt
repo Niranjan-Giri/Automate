@@ -14,6 +14,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
+find_package(PCL REQUIRED)
 
 add_executable(occupancy_grid src/OccupancyGrid.cpp)
 target_include_directories(occupancy_grid PUBLIC
@@ -29,7 +30,23 @@ ament_target_dependencies(occupancy_grid
   pcl_ros
 )
 
+add_executable(local_costmap  src/LocalCostmap.cpp)
+target_include_directories(local_costmap PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+ament_target_dependencies(local_costmap
+  rclcpp
+  sensor_msgs
+  nav_msgs
+  pcl_conversions
+  pcl_ros
+)
+target_link_libraries(local_costmap ${PCL_LIBRARIES})
+
 INSTALL(TARGETS occupancy_grid
+  DESTINATION lib/${PROJECT_NAME}
+)
+INSTALL(TARGETS local_costmap
   DESTINATION lib/${PROJECT_NAME}
 )
 

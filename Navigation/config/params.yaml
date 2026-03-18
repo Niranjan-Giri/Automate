@@ -5,3 +5,7 @@ occupancy_grid:
     resolution: 0.1
     min_height: 0.1
     max_height: 2.0
+
+local_costmap:
+  ros__parameters:
+    pcl2_topic: /lidar/point_cloud
