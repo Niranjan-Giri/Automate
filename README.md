@@ -25,13 +25,13 @@ Parameters:
 
 Key parameters:
 
-- `static_tf.ros__parameters.child_frames`: list of sensor frames.
-- `static_tf.ros__parameters.parent_frame`: typically `base_link`.
-- `odometry.ros__parameters.pcl2_topic`: point cloud topic.
-- `odometry.ros__parameters.use_imu`: enable IMU fusion.
-- `odometry.ros__parameters.imu_topic`: IMU topic.
-- `map_tf.ros__parameters.odom_topic`: odom topic.
-- `map_tf.ros__parameters.scan_match_topic`: scan match pose topic.
+- `static_tf -> child_frames`: list of sensor frames.
+- `static_tf -> parent_frame`: typically `base_link`.
+- `odometry  -> pcl2_topic`: point cloud topic.
+- `odometry  -> use_imu`: enable IMU fusion.
+- `odometry  -> imu_topic`: IMU topic.
+- `map_tf    -> odom_topic`: odom topic.
+- `map_tf    -> scan_match_topic`: scan match pose topic.
 
 ### Navigation
 
@@ -50,13 +50,13 @@ Parameters:
 
 Key parameters:
 
-- `occupancy_grid.ros__parameters.pcl2_topic`: point cloud topic.
-- `occupancy_grid.ros__parameters.map_frame`: map frame name.
-- `occupancy_grid.ros__parameters.resolution`: grid resolution (m).
-- `occupancy_grid.ros__parameters.min_height`: min point height.
-- `occupancy_grid.ros__parameters.max_height`: max point height.
-- `local_costmap.ros__parameters.pcl2_topic`: point cloud topic.
-- `local_costmap.ros__parameters.map_frame`: either use map_frame or base_link frame for costmap
+- `occupancy_grid -> pcl2_topic`: point cloud topic.
+- `occupancy_grid -> map_frame`: map frame name.
+- `occupancy_grid -> resolution`: grid resolution (m).
+- `occupancy_grid -> min_height`: min point height.
+- `occupancy_grid -> max_height`: max point height.
+- `local_costmap  -> pcl2_topic`: point cloud topic.
+- `local_costmap  -> map_frame`: either use map_frame or base_link frame for costmap
 
 ## Typical flow
 
