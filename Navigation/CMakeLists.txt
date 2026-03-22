@@ -40,6 +40,8 @@ ament_target_dependencies(local_costmap
   nav_msgs
   pcl_conversions
   pcl_ros
+  tf2_ros
+  tf2_sensor_msgs
 )
 target_link_libraries(local_costmap ${PCL_LIBRARIES})
 

@@ -11,6 +11,12 @@ LocalCostmap::LocalCostmap(): Node("local_costmap")
 
     cost_data.resize(width * height);
 
+    this->declare_parameter<bool>("map_frame", true);
+    map_frame = this->get_parameter("map_frame").as_bool();
+
+    tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, this);
+
     this->declare_parameter<std::string>("pcl2_topic", "/lidar/point_cloud");
     pcl2_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         this->get_parameter("pcl2_topic").as_string(), 10,
@@ -23,10 +29,57 @@ LocalCostmap::LocalCostmap(): Node("local_costmap")
 
 void LocalCostmap::pointcloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 {
+    sensor_msgs::msg::PointCloud2 cloud_map;
+
+    if (map_frame)
+    {
+        try 
+        {
+            tf_buffer_->transform(
+                *msg,
+                cloud_map,
+                "map",
+                tf2::durationFromSec(0.1)
+            );
+        } 
+        catch (tf2::TransformException &e) 
+        {
+            RCLCPP_WARN(this->get_logger(), "TF failed: %s", e.what());
+            return;
+        }
+    }
+
     std::fill(cost_data.begin(), cost_data.end(), 0);
 
     pcl::PointCloud<pcl::PointXYZ> cloud;
-    pcl::fromROSMsg(*msg, cloud);
+
+    if (map_frame)
+        pcl::fromROSMsg(cloud_map, cloud);
+    else
+        pcl::fromROSMsg(*msg, cloud);
+
+
+    geometry_msgs::msg::TransformStamped tf;
+
+    try 
+    {
+        tf = tf_buffer_->lookupTransform(
+            "map", "base_link", tf2::TimePointZero
+        );
+    } 
+    catch (...) 
+    {
+        return;
+    }
+
+    double robot_x = tf.transform.translation.x;
+    double robot_y = tf.transform.translation.y;
+
+    if (map_frame)
+    {
+        origin_x = robot_x - (width * resolution)/2;
+        origin_y = robot_y - (height * resolution)/2;
+    }
 
     for (const auto& point : cloud.points)
     {
@@ -70,10 +123,11 @@ void LocalCostmap::inflate_obstacles()
                         int cost = 100 - (dist * decay);
                         cost = std::max(cost, 0);
 
-                        int cell = inflated[ny * width + nx];
-                        if (cost > cell) 
+                        int* cell = new int; 
+                        *cell = inflated[ny * width + nx];
+                        if (cost > *cell)
                         {
-                            cell = cost;
+                            *cell = cost;
                         }
                     }
                 }
@@ -89,7 +143,12 @@ void LocalCostmap::publish_costmap(rclcpp::Time stamp)
     nav_msgs::msg::OccupancyGrid grid;
 
     grid.header.stamp = stamp;
-    grid.header.frame_id = "base_link";
+
+    if (map_frame)
+        grid.header.frame_id = "map";
+    else
+        grid.header.frame_id = "base_link";
+
     grid.info.resolution = resolution;
 
     grid.info.width = width;
