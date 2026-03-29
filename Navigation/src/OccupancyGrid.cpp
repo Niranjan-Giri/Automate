@@ -9,8 +9,9 @@ static constexpr float L_MAX  =  3.5f;
 OccupancyGrid::OccupancyGrid() : Node("occupancy_grid")
 {
     this->declare_parameter<std::string>("pcl2_topic", "/point_cloud/point_cloud");
+    auto sensor_qos = rclcpp::SensorDataQoS();
     pcl2_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        this->get_parameter("pcl2_topic").as_string(), 10,
+        this->get_parameter("pcl2_topic").as_string(), sensor_qos,
         std::bind(&OccupancyGrid::pcl2_callback, this, std::placeholders::_1)
     );
 
@@ -47,7 +48,8 @@ OccupancyGrid::OccupancyGrid() : Node("occupancy_grid")
     
     log_odds.assign(size, 0.0f);
 
-    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 10);
+    auto map_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", map_qos);
 }
 
 void OccupancyGrid::update_cell(int index, float delta)

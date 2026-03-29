@@ -18,12 +18,14 @@ LocalCostmap::LocalCostmap(): Node("local_costmap")
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, this);
 
     this->declare_parameter<std::string>("pcl2_topic", "/lidar/point_cloud");
+    auto sensor_qos = rclcpp::SensorDataQoS();
     pcl2_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        this->get_parameter("pcl2_topic").as_string(), 10,
+        this->get_parameter("pcl2_topic").as_string(), sensor_qos,
         std::bind(&LocalCostmap::pointcloud_callback, this, std::placeholders::_1)
     );
 
-    grid_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/local_costmap", 10);
+    auto costmap_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+    grid_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/local_costmap", costmap_qos);
     RCLCPP_INFO(this->get_logger(), "Local costmap running!");
 }
 
