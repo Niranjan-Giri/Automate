@@ -10,3 +10,14 @@ local_costmap:
   ros__parameters:
     pcl2_topic: /lidar/point_cloud
     map_frame: true
+
+global_planner:
+  ros__parameters:
+    map_topic: /map
+    goal_topic: /goal_pose
+    path_topic: /global_path
+    map_frame: map
+    base_frame: base_link
+    occupied_threshold: 50
+    unknown_is_occupied: true
+    

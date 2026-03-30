@@ -45,10 +45,24 @@ ament_target_dependencies(local_costmap
 )
 target_link_libraries(local_costmap ${PCL_LIBRARIES})
 
+add_executable(global_planner  src/GlobalPlanner.cpp)
+target_include_directories(global_planner PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+ament_target_dependencies(global_planner
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2_ros
+)
+
 INSTALL(TARGETS occupancy_grid
   DESTINATION lib/${PROJECT_NAME}
 )
 INSTALL(TARGETS local_costmap
+  DESTINATION lib/${PROJECT_NAME}
+)
+INSTALL(TARGETS global_planner
   DESTINATION lib/${PROJECT_NAME}
 )
 

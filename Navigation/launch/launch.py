@@ -33,6 +33,12 @@ def generate_launch_description():
             name='local_costmap',
             parameters=[params_file, {'use_sim_time': use_sim_time}]
         ),
+        Node(
+            package='Navigation',
+            executable='global_planner',
+            name='global_planner',
+            parameters=[params_file, {'use_sim_time': use_sim_time}]
+        ),
 
         Node(
             package='rviz2',
