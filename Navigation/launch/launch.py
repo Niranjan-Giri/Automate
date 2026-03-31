@@ -14,12 +14,28 @@ def generate_launch_description():
     )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
+    waypoints_file = LaunchConfiguration('waypoints_file')
+    use_waypoints = LaunchConfiguration('use_waypoints')
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
             description='Use simulation clock if true.'
+        ),
+        DeclareLaunchArgument(
+            'use_waypoints',
+            default_value='true',
+            description='Enable waypoint planning from YAML file.'
+        ),
+        DeclareLaunchArgument(
+            'waypoints_file',
+            default_value=os.path.join(
+                get_package_share_directory('Navigation'),
+                'config',
+                'waypoints.yaml'
+            ),
+            description='Path to waypoint YAML file.'
         ),
         Node(
             package='Navigation',
@@ -37,7 +53,14 @@ def generate_launch_description():
             package='Navigation',
             executable='global_planner',
             name='global_planner',
-            parameters=[params_file, {'use_sim_time': use_sim_time}]
+            parameters=[
+                params_file,
+                {
+                    'use_sim_time': use_sim_time,
+                    'use_waypoints': use_waypoints,
+                    'waypoints_file': waypoints_file,
+                }
+            ]
         ),
 
         Node(

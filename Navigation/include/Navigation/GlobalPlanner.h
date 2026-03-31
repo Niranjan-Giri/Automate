@@ -4,6 +4,7 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
@@ -14,6 +15,9 @@
 #include <string>
 #include <utility>
 #include <limits>
+#include <cmath>
+#include <algorithm>
+#include <yaml-cpp/yaml.h>
 
 
 class GlobalPlanner : public rclcpp::Node
@@ -37,8 +41,17 @@ private:
         bool operator>(const OpenEntry & other) const { return f > other.f; }
     };
 
+    struct Waypoint
+    {
+        double x;
+        double y;
+    };
+
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
     void goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+
+    bool load_waypoints_from_yaml(const std::string & path, std::vector<Waypoint> & out) const;
+    bool plan_waypoints(const nav_msgs::msg::OccupancyGrid & grid, const std::vector<Waypoint> & waypoints);
 
     bool get_robot_pose(double & x, double & y);
     bool world_to_grid(const nav_msgs::msg::OccupancyGrid & grid, double wx, double wy, int & gx, int & gy) const;
@@ -73,6 +86,12 @@ private:
     std::string path_topic_;
     std::string map_frame_;
     std::string base_frame_;
+
+    std::string waypoints_file_;
+    bool use_waypoints_;
+    std::vector<Waypoint> waypoints_;
+
+    rclcpp::Time last_planned_map_stamp_;
 
     int occupied_threshold_;
     bool unknown_is_occupied_;

@@ -1,10 +1,5 @@
 #include "Navigation/GlobalPlanner.h"
 
-#include <geometry_msgs/msg/transform_stamped.hpp>
-
-#include <cmath>
-#include <algorithm>
-
 GlobalPlanner::GlobalPlanner() : Node("global_planner")
 {
 	this->declare_parameter<std::string>("map_topic", "/map");
@@ -12,6 +7,8 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 	this->declare_parameter<std::string>("path_topic", "/global_path");
 	this->declare_parameter<std::string>("map_frame", "map");
 	this->declare_parameter<std::string>("base_frame", "base_link");
+	this->declare_parameter<std::string>("waypoints_file", "");
+	this->declare_parameter<bool>("use_waypoints", true);
 	this->declare_parameter<int>("occupied_threshold", 50);
 	this->declare_parameter<bool>("unknown_is_occupied", true);
 
@@ -20,8 +17,11 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 	path_topic_ = this->get_parameter("path_topic").as_string();
 	map_frame_ = this->get_parameter("map_frame").as_string();
 	base_frame_ = this->get_parameter("base_frame").as_string();
+	waypoints_file_ = this->get_parameter("waypoints_file").as_string();
+	use_waypoints_ = this->get_parameter("use_waypoints").as_bool();
 	occupied_threshold_ = this->get_parameter("occupied_threshold").as_int();
 	unknown_is_occupied_ = this->get_parameter("unknown_is_occupied").as_bool();
+	last_planned_map_stamp_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
 
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, this);
@@ -39,7 +39,20 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 		std::bind(&GlobalPlanner::goal_callback, this, std::placeholders::_1)
 	);
 
-	path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_topic_, 10);
+	auto path_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+	path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_topic_, path_qos);
+
+	if (use_waypoints_ && !waypoints_file_.empty())
+	{
+		if (load_waypoints_from_yaml(waypoints_file_, waypoints_))
+		{
+			RCLCPP_INFO(this->get_logger(), "Loaded %zu waypoint(s) from %s", waypoints_.size(), waypoints_file_.c_str());
+		}
+		else
+		{
+			RCLCPP_WARN(this->get_logger(), "Failed to load waypoints from %s", waypoints_file_.c_str());
+		}
+	}
 
 	RCLCPP_INFO(
 		this->get_logger(),
@@ -52,12 +65,44 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 
 void GlobalPlanner::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
-	std::lock_guard<std::mutex> lock(map_mutex_);
-	latest_map_ = msg;
+	{
+		std::lock_guard<std::mutex> lock(map_mutex_);
+		latest_map_ = msg;
+	}
+
+	if (use_waypoints_ && !waypoints_.empty())
+	{
+		const rclcpp::Time map_stamp = msg->header.stamp;
+		if (map_stamp > last_planned_map_stamp_)
+		{
+			const bool tf_ready = tf_buffer_->canTransform(
+				map_frame_,
+				base_frame_,
+				tf2::TimePointZero,
+				tf2::durationFromSec(0.05)
+			);
+			if (!tf_ready)
+			{
+				RCLCPP_DEBUG(this->get_logger(), "TF not ready for waypoint planning.");
+				return;
+			}
+
+			if (plan_waypoints(*msg, waypoints_))
+			{
+				last_planned_map_stamp_ = map_stamp;
+			}
+		}
+	}
 }
 
 void GlobalPlanner::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
+	if (use_waypoints_ && !waypoints_.empty())
+	{
+		RCLCPP_DEBUG(this->get_logger(), "Ignoring goal topic because waypoints are enabled.");
+		return;
+	}
+
 	nav_msgs::msg::OccupancyGrid::SharedPtr map_copy;
 	{
 		std::lock_guard<std::mutex> lock(map_mutex_);
@@ -95,6 +140,13 @@ void GlobalPlanner::goal_callback(const geometry_msgs::msg::PoseStamped::SharedP
 		return;
 	}
 
+	RCLCPP_INFO(
+		this->get_logger(),
+		"Going to goal: x=%.3f y=%.3f",
+		msg->pose.position.x,
+		msg->pose.position.y
+	);
+
 	if (is_occupied(*map_copy, start_gx, start_gy))
 	{
 		RCLCPP_WARN(this->get_logger(), "Start cell is occupied. Cannot plan.");
@@ -116,6 +168,117 @@ void GlobalPlanner::goal_callback(const geometry_msgs::msg::PoseStamped::SharedP
 
 	publish_path(*map_copy, cells);
 	RCLCPP_INFO(this->get_logger(), "Published global path with %zu poses.", cells.size());
+}
+
+bool GlobalPlanner::load_waypoints_from_yaml(const std::string & path, std::vector<Waypoint> & out) const
+{
+	try
+	{
+		YAML::Node root = YAML::LoadFile(path);
+		if (!root["waypoints"] || !root["waypoints"].IsSequence())
+		{
+			RCLCPP_WARN(this->get_logger(), "Waypoints file has no 'waypoints' sequence.");
+			return false;
+		}
+
+		out.clear();
+		for (const auto & wp : root["waypoints"])
+		{
+			if (!wp["x"] || !wp["y"])
+			{
+				RCLCPP_WARN(this->get_logger(), "Skipping waypoint missing x or y.");
+				continue;
+			}
+			Waypoint point;
+			point.x = wp["x"].as<double>();
+			point.y = wp["y"].as<double>();
+			out.push_back(point);
+		}
+
+		return !out.empty();
+	}
+	catch (const YAML::Exception & e)
+	{
+		RCLCPP_ERROR(this->get_logger(), "YAML parse error: %s", e.what());
+		return false;
+	}
+}
+
+bool GlobalPlanner::plan_waypoints(const nav_msgs::msg::OccupancyGrid & grid, const std::vector<Waypoint> & waypoints)
+{
+	if (waypoints.empty())
+	{
+		RCLCPP_WARN(this->get_logger(), "No waypoints provided.");
+		return false;
+	}
+
+	double robot_x = 0.0;
+	double robot_y = 0.0;
+	if (!get_robot_pose(robot_x, robot_y))
+	{
+		RCLCPP_WARN(this->get_logger(), "Failed to get robot pose (%s -> %s).", map_frame_.c_str(), base_frame_.c_str());
+		return false;
+	}
+
+	int start_gx = 0;
+	int start_gy = 0;
+	if (!world_to_grid(grid, robot_x, robot_y, start_gx, start_gy))
+	{
+		RCLCPP_WARN(this->get_logger(), "Robot start is outside map bounds.");
+		return false;
+	}
+
+	if (is_occupied(grid, start_gx, start_gy))
+	{
+		RCLCPP_WARN(this->get_logger(), "Start cell is occupied. Cannot plan.");
+		return false;
+	}
+
+	std::vector<std::pair<int, int>> combined_cells;
+	int current_gx = start_gx;
+	int current_gy = start_gy;
+
+	for (size_t i = 0; i < waypoints.size(); ++i)
+	{
+		int goal_gx = 0;
+		int goal_gy = 0;
+		if (!world_to_grid(grid, waypoints[i].x, waypoints[i].y, goal_gx, goal_gy))
+		{
+			RCLCPP_WARN(this->get_logger(), "Waypoint %zu is outside map bounds.", i);
+			return false;
+		}
+
+		RCLCPP_INFO(
+			this->get_logger(),
+			"Going to waypoint %zu: x=%.3f y=%.3f",
+			i,
+			waypoints[i].x,
+			waypoints[i].y
+		);
+
+		if (is_occupied(grid, goal_gx, goal_gy))
+		{
+			RCLCPP_WARN(this->get_logger(), "Waypoint %zu is occupied. Cannot plan.", i);
+			return false;
+		}
+
+		std::vector<std::pair<int, int>> segment;
+		if (!plan_astar(grid, current_gx, current_gy, goal_gx, goal_gy, segment))
+		{
+			RCLCPP_WARN(this->get_logger(), "A* failed to reach waypoint %zu.", i);
+			return false;
+		}
+
+		// Skip the first cell on subsequent segments to avoid duplicate joins.
+		const size_t start_idx = combined_cells.empty() ? 0 : 1;
+		combined_cells.insert(combined_cells.end(), segment.begin() + start_idx, segment.end());
+		current_gx = goal_gx;
+		current_gy = goal_gy;
+	}
+
+	publish_path(grid, combined_cells);
+	RCLCPP_INFO(this->get_logger(), "Published waypoint path with %zu poses.", combined_cells.size());
+	return true;
 }
 
 bool GlobalPlanner::get_robot_pose(double & x, double & y)

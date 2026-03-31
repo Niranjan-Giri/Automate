@@ -15,6 +15,7 @@ find_package(tf2_sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(PCL REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 add_executable(occupancy_grid src/OccupancyGrid.cpp)
 target_include_directories(occupancy_grid PUBLIC
@@ -55,6 +56,7 @@ ament_target_dependencies(global_planner
   nav_msgs
   tf2_ros
 )
+target_link_libraries(global_planner yaml-cpp)
 
 INSTALL(TARGETS occupancy_grid
   DESTINATION lib/${PROJECT_NAME}
