@@ -20,4 +20,15 @@ global_planner:
     base_frame: base_link
     occupied_threshold: 50
     unknown_is_occupied: true
+
+local_planner:
+  ros__parameters:
+    path_topic: /global_path
+    cmd_topic: /cmd_vel
+    map_frame: map
+    base_frame: base_link
+    lookahead_distance: 1.0
+    goal_tolerance: 0.3
+    linear_speed: 0.1
+    control_rate_hz: 20.0 
     

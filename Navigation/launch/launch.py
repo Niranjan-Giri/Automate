@@ -62,6 +62,12 @@ def generate_launch_description():
                 }
             ]
         ),
+        Node(
+            package='Navigation',
+            executable='local_planner',
+            name='local_planner',
+            parameters=[params_file, {'use_sim_time': use_sim_time}]
+        ),
 
         Node(
             package='rviz2',

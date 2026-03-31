@@ -10,7 +10,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
@@ -58,6 +60,19 @@ ament_target_dependencies(global_planner
 )
 target_link_libraries(global_planner yaml-cpp)
 
+add_executable(local_planner  src/LocalPlanner.cpp)
+target_include_directories(local_planner PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+ament_target_dependencies(local_planner
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2_geometry_msgs
+  tf2_ros
+  tf2
+)
+
 INSTALL(TARGETS occupancy_grid
   DESTINATION lib/${PROJECT_NAME}
 )
@@ -65,6 +80,9 @@ INSTALL(TARGETS local_costmap
   DESTINATION lib/${PROJECT_NAME}
 )
 INSTALL(TARGETS global_planner
+  DESTINATION lib/${PROJECT_NAME}
+)
+INSTALL(TARGETS local_planner
   DESTINATION lib/${PROJECT_NAME}
 )
 
