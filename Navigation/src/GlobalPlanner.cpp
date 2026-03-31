@@ -21,7 +21,6 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 	use_waypoints_ = this->get_parameter("use_waypoints").as_bool();
 	occupied_threshold_ = this->get_parameter("occupied_threshold").as_int();
 	unknown_is_occupied_ = this->get_parameter("unknown_is_occupied").as_bool();
-	last_planned_map_stamp_ = rclcpp::Time(0, 0, this->get_clock()->get_clock_type());
 
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_, this);
@@ -41,6 +40,11 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 
 	auto path_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
 	path_pub_ = this->create_publisher<nav_msgs::msg::Path>(path_topic_, path_qos);
+
+	timer_ = this->create_wall_timer(
+		std::chrono::milliseconds(1000),
+		std::bind(&GlobalPlanner::planning_loop, this)
+	);
 
 	if (use_waypoints_ && !waypoints_file_.empty())
 	{
@@ -65,38 +69,15 @@ GlobalPlanner::GlobalPlanner() : Node("global_planner")
 
 void GlobalPlanner::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
-	{
-		std::lock_guard<std::mutex> lock(map_mutex_);
-		latest_map_ = msg;
-	}
-
-	if (use_waypoints_ && !waypoints_.empty())
-	{
-		const rclcpp::Time map_stamp = msg->header.stamp;
-		if (map_stamp > last_planned_map_stamp_)
-		{
-			const bool tf_ready = tf_buffer_->canTransform(
-				map_frame_,
-				base_frame_,
-				tf2::TimePointZero,
-				tf2::durationFromSec(0.05)
-			);
-			if (!tf_ready)
-			{
-				RCLCPP_DEBUG(this->get_logger(), "TF not ready for waypoint planning.");
-				return;
-			}
-
-			if (plan_waypoints(*msg, waypoints_))
-			{
-				last_planned_map_stamp_ = map_stamp;
-			}
-		}
-	}
+	std::lock_guard<std::mutex> lock(map_mutex_);
+	latest_map_ = msg;
+	map_received_ = true;
 }
 
 void GlobalPlanner::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
+	path_active_ = false;
+
 	if (use_waypoints_ && !waypoints_.empty())
 	{
 		RCLCPP_DEBUG(this->get_logger(), "Ignoring goal topic because waypoints are enabled.");
@@ -168,6 +149,40 @@ void GlobalPlanner::goal_callback(const geometry_msgs::msg::PoseStamped::SharedP
 
 	publish_path(*map_copy, cells);
 	RCLCPP_INFO(this->get_logger(), "Published global path with %zu poses.", cells.size());
+}
+
+void GlobalPlanner::planning_loop()
+{
+	if (!map_received_)
+	{
+		RCLCPP_DEBUG(this->get_logger(), "No map yet.");
+		return;
+	}
+
+	nav_msgs::msg::OccupancyGrid::SharedPtr map_copy;
+	{
+		std::lock_guard<std::mutex> lock(map_mutex_);
+		map_copy = latest_map_;
+	}
+
+	if (!map_copy)
+	{
+		return;
+	}
+
+	if (path_active_)
+	{
+		return;
+	}
+
+	if (use_waypoints_ && !waypoints_.empty())
+	{
+		RCLCPP_INFO(this->get_logger(), "Planning waypoint path...");
+		if (plan_waypoints(*map_copy, waypoints_))
+		{
+			path_active_ = true;
+		}
+	}
 }
 
 bool GlobalPlanner::load_waypoints_from_yaml(const std::string & path, std::vector<Waypoint> & out) const
@@ -443,7 +458,7 @@ bool GlobalPlanner::plan_astar(
 			{
 				g_score[nidx] = tentative_g;
 				parent[nidx] = current_idx;
-				const float f = tentative_g + heuristic(nx, ny);
+				const float f = tentative_g + heuristic(nx, ny) * 1.001f;
 				open_set.push(OpenEntry{f, nidx});
 			}
 		}

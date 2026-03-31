@@ -18,6 +18,7 @@
 #include <cmath>
 #include <algorithm>
 #include <yaml-cpp/yaml.h>
+#include <chrono>
 
 
 class GlobalPlanner : public rclcpp::Node
@@ -49,6 +50,7 @@ private:
 
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
     void goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+    void planning_loop();
 
     bool load_waypoints_from_yaml(const std::string & path, std::vector<Waypoint> & out) const;
     bool plan_waypoints(const nav_msgs::msg::OccupancyGrid & grid, const std::vector<Waypoint> & waypoints);
@@ -91,7 +93,9 @@ private:
     bool use_waypoints_;
     std::vector<Waypoint> waypoints_;
 
-    rclcpp::Time last_planned_map_stamp_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    bool path_active_ = false;
+    bool map_received_ = false;
 
     int occupied_threshold_;
     bool unknown_is_occupied_;
